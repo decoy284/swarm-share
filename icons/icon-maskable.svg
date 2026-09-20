@@ -1,0 +1,26 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" width="512" height="512">
+  <defs>
+    <linearGradient id="ember" x1="0" y1="0" x2="0.35" y2="1">
+      <stop offset="0" stop-color="#FFA23D"/>
+      <stop offset="0.55" stop-color="#EE6316"/>
+      <stop offset="1" stop-color="#C03D0A"/>
+    </linearGradient>
+  </defs>
+  <rect width="512" height="512" fill="url(#ember)"/>
+  <!-- マスク後の安全域（中央80%）に収まるよう 0.66 倍で中央に置く -->
+  <g transform="translate(256 256) scale(0.66) translate(-256 -256)">
+    <ellipse cx="256" cy="412" rx="66" ry="15" fill="#FFFFFF" opacity="0.3"/>
+    <path fill="#FFFFFF" fill-rule="evenodd" d="
+      M256 84
+      a108 108 0 0 0 -108 108
+      c0 73 83 152 103 196
+      a5.5 5.5 0 0 0 10 0
+      c20 -44 103 -123 103 -196
+      a108 108 0 0 0 -108 -108
+      Z
+      M256 144
+      a48 48 0 1 1 0 96
+      a48 48 0 1 1 0 -96
+      Z"/>
+  </g>
+</svg>

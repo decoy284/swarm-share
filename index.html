@@ -1,0 +1,70 @@
+<!doctype html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>I'm AT</title>
+<meta name="description" content="Swarm のチェックイン履歴を一覧して、X やほかのアプリに共有する。">
+<meta name="theme-color" content="#FAF6F0" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#15120E" media="(prefers-color-scheme: dark)">
+<link rel="manifest" href="/manifest.webmanifest">
+<link rel="icon" href="/icons/favicon.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" href="/icons/apple-touch-icon.png">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="I'm AT">
+<meta name="mobile-web-app-capable" content="yes">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,600;12..96,800&display=swap">
+<link rel="stylesheet" href="/styles.css">
+</head>
+<body>
+
+<header class="topbar" id="topbar">
+  <div class="topbar__inner">
+    <h1 class="wordmark">I'm AT</h1>
+    <div class="topbar__actions" id="topbar-actions" hidden>
+      <button type="button" id="btn-refresh" class="iconbtn" aria-label="再読み込み">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M20 12a8 8 0 1 1-2.6-5.9M20 4v4h-4"/></svg>
+      </button>
+      <button type="button" id="btn-disconnect" class="iconbtn" aria-label="Foursquare から切断">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M9 4H6a2 2 0 0 0-2 2v12a2 2 0 0 0 2 2h3M16 16l4-4-4-4M20 12H9"/></svg>
+      </button>
+    </div>
+  </div>
+</header>
+
+<main id="main">
+
+  <!-- 未接続 -->
+  <section class="connect" id="view-connect" hidden>
+    <p class="connect__lead">Swarm のチェックイン履歴を読み込んで、<br>X やほかのアプリにワンタップで共有します。</p>
+    <button type="button" id="btn-connect" class="btn btn--primary btn--wide">Foursquare に接続</button>
+    <p class="connect__note" id="connect-note"></p>
+  </section>
+
+  <!-- 読み込み中 -->
+  <section class="state" id="view-loading" hidden>
+    <div class="spinner" aria-hidden="true"></div>
+    <p class="state__text">チェックインを読み込み中…</p>
+  </section>
+
+  <!-- エラー -->
+  <section class="state" id="view-error" hidden>
+    <p class="state__text" id="error-text">読み込みに失敗しました。</p>
+    <button type="button" id="btn-retry" class="btn">もう一度試す</button>
+  </section>
+
+  <!-- 一覧 -->
+  <section id="view-list" hidden>
+    <ol class="log" id="log"></ol>
+    <p class="log__end" id="log-end" hidden>これより前の履歴は Swarm アプリで見てください</p>
+  </section>
+
+</main>
+
+<div class="toast" id="toast" role="status" aria-live="polite" hidden></div>
+
+<script src="/app.js"></script>
+</body>
+</html>

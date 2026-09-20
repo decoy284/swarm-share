@@ -1,0 +1,4 @@
+# ローカル検証用（wrangler pages dev が読む）。
+# .dev.vars にコピーして値を入れる。.dev.vars は git に入らない。
+FSQ_CLIENT_ID=
+FSQ_CLIENT_SECRET=
