@@ -99,6 +99,30 @@ URL は一覧のレスポンスに入っている `canonicalUrl`
 （transient activation）が切れてポップアップも共有シートもブラウザに弾かれる。
 `GET /v2/checkins/{id}` を共有時に叩く実装にしていたときは、これで実際に詰まった。
 
+### コメント欄
+
+一覧の各行にコメント欄がある。Swarm 側のコメント（shout）が初期値で、
+その場で書き換えて共有できる。空にすれば `I'm at …` の文型に戻る（shout には巻き戻さない）。
+
+書きかけは localStorage（`imsat_drafts`）に置く。X アプリへ切り替えている間に
+PWA が裏で落とされても消えないようにするため。一覧から外れたチェックインの分は
+読み込みのたびに掃除する。
+
+### Android では X アプリを直接開く
+
+`window.open('https://x.com/intent/post?...')` だと、X アプリが起動したあとに
+**x.com のカスタムタブが居残る**。Web 側はログインしていないのでログイン画面が残り、
+毎回閉じることになる。
+
+Android では Chrome が解釈する `intent:` URI を使って X アプリを直接呼ぶ。
+
+```
+intent://post?message=<text>#Intent;scheme=twitter;package=com.twitter.android;S.browser_fallback_url=<web>;end
+```
+
+アプリが入っていなければ Chrome が `browser_fallback_url` に落としてくれるので、
+未インストールでも Web の intent 画面にはたどり着く。
+
 ---
 
 ## 使っている API

@@ -9,6 +9,9 @@ const API_VERSION = '20230823';
 const LIMIT = 100;
 const LS_TOKEN = 'imsat_token';
 const LS_UID = 'imsat_uid';
+const LS_DRAFTS = 'imsat_drafts';
+
+const IS_ANDROID = /Android/i.test(navigator.userAgent);
 
 const el = (id) => document.getElementById(id);
 
@@ -23,6 +26,8 @@ let token = null;
 let clientId = null;
 /** パーマリンクの組み立てに使う自分の Foursquare ユーザーID */
 let userId = null;
+/** 書きかけのコメント（チェックインIDごと）。アプリを切り替えても消えないよう保存する */
+let drafts = {};
 
 /* --- ビュー切り替え -------------------------------------------- */
 
@@ -99,9 +104,11 @@ function forgetSession() {
   try {
     localStorage.removeItem(LS_TOKEN);
     localStorage.removeItem(LS_UID);
+    localStorage.removeItem(LS_DRAFTS);
   } catch (e) { /* noop */ }
   token = null;
   userId = null;
+  drafts = {};
 }
 
 function disconnect() {
@@ -227,10 +234,42 @@ function placeLabel(venue) {
 
 /* --- 共有文面 --------------------------------------------------- */
 
-/** Swarm 純正と同じ形。コメントの有無で文型が変わる */
-function buildText(checkin, url) {
+/* --- コメントの下書き ------------------------------------------- */
+
+function loadDrafts() {
+  try {
+    drafts = JSON.parse(localStorage.getItem(LS_DRAFTS) || '{}') || {};
+  } catch (e) {
+    drafts = {};
+  }
+}
+
+function saveDrafts() {
+  try { localStorage.setItem(LS_DRAFTS, JSON.stringify(drafts)); } catch (e) { /* noop */ }
+}
+
+/** 一覧から消えたチェックインの下書きは溜め込まない */
+function pruneDrafts(checkins) {
+  const alive = new Set(checkins.map((c) => c.id));
+  let changed = false;
+  for (const id of Object.keys(drafts)) {
+    if (!alive.has(id)) {
+      delete drafts[id];
+      changed = true;
+    }
+  }
+  if (changed) saveDrafts();
+}
+
+/**
+ * Swarm 純正と同じ形。コメントの有無で文型が変わる。
+ * comment を渡したときはそれが正。空文字なら「コメント無し」の扱いで、
+ * Swarm 側の shout には戻さない（入力欄で消したのに復活したら驚くので）。
+ */
+function buildText(checkin, url, comment) {
   const place = `${checkin.venue.name} in ${placeLabel(checkin.venue)}`.trim();
-  const shout = (checkin.shout || '').trim();
+  const source = typeof comment === 'string' ? comment : (checkin.shout || '');
+  const shout = source.trim();
   const body = shout ? `${shout}（@ ${place}）` : `I'm at ${place}`;
   return url ? `${body} ${url}` : body;
 }
@@ -257,15 +296,35 @@ function permalink(checkin) {
 /* --- 共有アクション --------------------------------------------- */
 /* どちらもクリックから同期で呼ぶ。await を挟んではいけない */
 
-function postToX(checkin) {
-  const text = buildText(checkin, permalink(checkin));
-  const url = `https://x.com/intent/post?text=${encodeURIComponent(text)}`;
-  const opened = window.open(url, '_blank', 'noopener');
-  if (!opened) location.href = url;
+/** Chrome が解釈する intent: URI。X アプリを直接開き、無ければ web に落とす */
+function androidXIntent(text, web) {
+  return 'intent://post?message=' + encodeURIComponent(text)
+    + '#Intent;scheme=twitter;package=com.twitter.android'
+    + ';S.browser_fallback_url=' + encodeURIComponent(web)
+    + ';end';
 }
 
-function shareCheckin(checkin) {
-  const text = buildText(checkin, permalink(checkin));
+function postToX(checkin, comment) {
+  const text = buildText(checkin, permalink(checkin), comment);
+  const web = `https://x.com/intent/post?text=${encodeURIComponent(text)}`;
+
+  /*
+   * Android で window.open すると、X アプリが起動したあとに x.com の
+   * カスタムタブが居残る（Web 側はログインしていないのでログイン画面になる）。
+   * intent: で X アプリを直接呼べばタブ自体が生まれない。
+   * アプリが入っていなければ Chrome が browser_fallback_url に落としてくれる。
+   */
+  if (IS_ANDROID) {
+    location.href = androidXIntent(text, web);
+    return;
+  }
+
+  const opened = window.open(web, '_blank', 'noopener');
+  if (!opened) location.href = web;
+}
+
+function shareCheckin(checkin, comment) {
+  const text = buildText(checkin, permalink(checkin), comment);
 
   if (navigator.share) {
     navigator.share({ text }).catch((e) => {
@@ -297,6 +356,8 @@ function renderLog(checkins) {
     show('error');
     return;
   }
+
+  pruneDrafts(checkins);
 
   const shareLabel = navigator.share ? '共有' : 'コピー';
   let currentDay = null;
@@ -346,13 +407,35 @@ function renderLog(checkins) {
       body.append(p);
     }
 
-    const shout = (checkin.shout || '').trim();
-    if (shout) {
-      const p = document.createElement('p');
-      p.className = 'entry__shout';
-      p.textContent = shout;
-      body.append(p);
-    }
+    /* Swarm 側のコメントを初期値に、その場で書き換えて共有できるようにする */
+    const comment = document.createElement('input');
+    comment.type = 'text';
+    comment.id = `comment-${checkin.id}`;
+    comment.className = 'entry__comment';
+    comment.placeholder = 'コメントを添える（任意）';
+    comment.setAttribute('aria-label', `${checkin.venue.name} に添えるコメント`);
+    comment.autocomplete = 'off';
+    comment.enterKeyHint = 'done';
+    comment.value = Object.prototype.hasOwnProperty.call(drafts, checkin.id)
+      ? drafts[checkin.id]
+      : (checkin.shout || '');
+
+    const syncComment = () => {
+      const value = comment.value.trim();
+      if (value) drafts[checkin.id] = comment.value;
+      else delete drafts[checkin.id];
+      saveDrafts();
+      comment.classList.toggle('is-filled', value.length > 0);
+    };
+    comment.classList.toggle('is-filled', comment.value.trim().length > 0);
+    comment.addEventListener('input', syncComment);
+    comment.addEventListener('keydown', (e) => {
+      if (e.key === 'Enter') {
+        e.preventDefault();
+        comment.blur();
+      }
+    });
+    body.append(comment);
 
     const actions = document.createElement('div');
     actions.className = 'entry__actions';
@@ -361,7 +444,7 @@ function renderLog(checkins) {
     xBtn.type = 'button';
     xBtn.className = 'btn btn--primary';
     xBtn.innerHTML = `${ICON_X}<span>X でポスト</span>`;
-    xBtn.addEventListener('click', () => postToX(checkin));
+    xBtn.addEventListener('click', () => postToX(checkin, comment.value));
 
     const shareBtn = document.createElement('button');
     shareBtn.type = 'button';
@@ -369,7 +452,7 @@ function renderLog(checkins) {
     shareBtn.setAttribute('aria-label', shareLabel);
     shareBtn.title = shareLabel;
     shareBtn.innerHTML = ICON_SHARE;
-    shareBtn.addEventListener('click', () => shareCheckin(checkin));
+    shareBtn.addEventListener('click', () => shareCheckin(checkin, comment.value));
 
     actions.append(xBtn, shareBtn);
     body.append(actions);
@@ -390,6 +473,7 @@ el('btn-retry').addEventListener('click', loadCheckins);
 
 async function boot() {
   try { token = localStorage.getItem(LS_TOKEN); } catch (e) { token = null; }
+  loadDrafts();
 
   const params = new URLSearchParams(location.search);
   const code = params.get('code');

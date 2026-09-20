@@ -290,15 +290,43 @@ img { max-width: 100%; }
   overflow-wrap: anywhere;
 }
 
-.entry__shout {
-  margin: .55rem 0 0;
+/* コメント欄。空のうちは静かに、入っていると共有に乗る合図として色が付く */
+.entry__comment {
+  display: block;
+  width: 100%;
+  margin: .6rem 0 0;
   padding: .45rem .7rem;
-  border-left: 2px solid var(--accent);
-  border-radius: 0 6px 6px 0;
-  background: var(--accent-soft);
+  border: 1px solid var(--line);
+  border-left-width: 2px;
+  border-left-color: var(--line-strong);
+  border-radius: 0 8px 8px 0;
+  background: transparent;
   color: var(--ink-soft);
-  font-size: .875rem;
-  overflow-wrap: anywhere;
+  font: inherit;
+  /* 16px 未満だとフォーカス時に拡大する端末があるので下げない */
+  font-size: 1rem;
+  line-height: 1.5;
+  transition: border-color .15s, background .15s, color .15s;
+}
+
+.entry__comment::placeholder {
+  color: var(--muted);
+  opacity: .75;
+}
+
+.entry__comment:hover { border-color: var(--line-strong); }
+
+.entry__comment.is-filled {
+  border-left-color: var(--accent);
+  background: var(--accent-soft);
+  color: var(--ink);
+}
+
+.entry__comment:focus {
+  outline: none;
+  border-color: var(--accent);
+  background: var(--surface);
+  color: var(--ink);
 }
 
 .chip {
