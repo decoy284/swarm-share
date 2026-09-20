@@ -32,20 +32,28 @@ functions/api/token.js  POST /api/token   → 認可コードをトークンに�
 
 ## セットアップ
 
-### 1. Foursquare アプリを登録する
+### 1. Foursquare のプロジェクトを作る
 
-https://foursquare.com/developers/apps で **Create a new app**。
+**旧 `foursquare.com/developers/apps` は廃止済み**で、アクセスすると新しい
+Developer Console にリダイレクトされる。v2 の OAuth 資格情報はプロジェクトの設定に移っている。
 
-| 項目 | 値 |
-| --- | --- |
-| App name | I'm AT |
-| Redirect URI(s) | `https://swarm-share.pages.dev/`<br>`http://localhost:8788/` |
+1. https://foursquare.com/developers/home にログイン
+2. **Create a New Project**（名前は `I'm AT`）
+3. プロジェクト名をクリック → 左メニューの **Settings**
+4. **OAuth Authentication** セクションに `Client Id` と `Client Secret` がある
+5. 同セクションで次を設定して **Save**
+
+   | 項目 | 値 |
+   | --- | --- |
+   | Project URL | `https://swarm-share.pages.dev/` |
+   | Redirect URL | `https://swarm-share.pages.dev/` と `http://localhost:8788/` |
+
+Redirect URL は複数登録できるコンボボックス。入力したあと候補に出る
+`Add "..."` をクリックしないとタグとして確定しない。
 
 - **末尾のスラッシュまで完全一致**させる。ここがズレると認可後に戻ってこられない
 - ハッシュ（`#/auth` など）は**付けない**。フラグメントはサーバーに送られないので、
   `?code=` がフラグメントの後ろに付いてしまい、`location.search` から読めなくなる
-
-発行された **Client ID** と **Client Secret** を控える。
 
 ### 2. Cloudflare Pages につなぐ
 
