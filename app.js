@@ -296,28 +296,28 @@ function permalink(checkin) {
 /* --- 共有アクション --------------------------------------------- */
 /* どちらもクリックから同期で呼ぶ。await を挟んではいけない */
 
-function postToX(checkin, comment) {
+/**
+ * X の投稿画面の URL。これを素の <a href> に載せる。
+ *
+ * ボタン＋ window.open ではなくリンクにしておくと、ポップアップブロックにも
+ * transient activation にも縛られない（リンクのクリックは素通りする）。
+ *
+ * Android での渡し方は実機で4通り試した結果、
+ *
+ *   window.open(web)           … 本文は入るが x.com のカスタムタブが居残る
+ *   twitter://post?message=    … アプリは開くが本文が空
+ *   intent: + package=         … 本文は入る・タブも出ない
+ *   同じウィンドウで web へ    … 本文は入る・タブも出ない  ← これ（target="_self"）
+ *
+ * 差は実質「タブが残るか」だけだったので、いちばん短い形を採る。
+ * Chrome が App Link として X アプリに引き渡すので、PWA はその場に残る。
+ *
+ * なお X アプリの投稿画面は本文の上に空行を1行置いてカーソルを出すが、
+ * これは渡し方に関係なく出る X 側の仕様で、投稿すればトリムされる。
+ */
+function xPostUrl(checkin, comment) {
   const text = buildText(checkin, permalink(checkin), comment);
-  const web = `https://x.com/intent/post?text=${encodeURIComponent(text)}`;
-
-  /*
-   * Android は X アプリへの渡し方で結果が変わる。実機で確かめた挙動:
-   *
-   *   window.open(web)              … 本文は入るが、x.com のカスタムタブが居残る
-   *   intent: + package=            … タブは出ないが、投稿画面の先頭に空行が足される
-   *   自分のウィンドウから web へ   … 本文そのまま・タブも出ない  ← これ
-   *
-   * App Link で受け取ったときだけ X アプリは本文をそのまま置く。
-   * タブを開かずに遷移すれば、Chrome が X アプリに引き渡してくれて
-   * PWA 自身はその場に残る（アプリが無いときだけ x.com へ進む）。
-   */
-  if (IS_ANDROID) {
-    location.href = web;
-    return;
-  }
-
-  const opened = window.open(web, '_blank', 'noopener');
-  if (!opened) location.href = web;
+  return `https://x.com/intent/post?text=${encodeURIComponent(text)}`;
 }
 
 function shareCheckin(checkin, comment) {
@@ -437,11 +437,16 @@ function renderLog(checkins) {
     const actions = document.createElement('div');
     actions.className = 'entry__actions';
 
-    const xBtn = document.createElement('button');
-    xBtn.type = 'button';
-    xBtn.className = 'btn btn--primary';
-    xBtn.innerHTML = `${ICON_X}<span>X でポスト</span>`;
-    xBtn.addEventListener('click', () => postToX(checkin, comment.value));
+    /* ボタンではなくリンク。Android だけ同じウィンドウで開いてタブを増やさない */
+    const xLink = document.createElement('a');
+    xLink.className = 'btn btn--primary';
+    xLink.target = IS_ANDROID ? '_self' : '_blank';
+    xLink.rel = 'noopener';
+    xLink.innerHTML = `${ICON_X}<span>X でポスト</span>`;
+    xLink.href = xPostUrl(checkin, comment.value);
+    comment.addEventListener('input', () => {
+      xLink.href = xPostUrl(checkin, comment.value);
+    });
 
     const shareBtn = document.createElement('button');
     shareBtn.type = 'button';
@@ -451,7 +456,7 @@ function renderLog(checkins) {
     shareBtn.innerHTML = ICON_SHARE;
     shareBtn.addEventListener('click', () => shareCheckin(checkin, comment.value));
 
-    actions.append(xBtn, shareBtn);
+    actions.append(xLink, shareBtn);
     body.append(actions);
 
     li.append(time, body);
