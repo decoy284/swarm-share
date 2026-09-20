@@ -89,9 +89,15 @@ Swarm 純正と同じ形。コメント（shout）の有無で文型が変わる
 コメントあり: うまかった（@ 方南ロマンス食堂 in 杉並区, 東京都） https://swarmapp.com/user/…/checkin/…?s=…
 ```
 
-URL は `GET /v2/checkins/{id}` の `checkinShortUrl`。署名（`?s=`）つきのパーマリンクが
-そのまま返ってくるので、非公開チェックインでもリンクが開ける。
-一覧のレスポンスには含まれないので、共有ボタンを押したときに取りにいく（結果はメモ化）。
+URL は一覧のレスポンスに入っている `canonicalUrl`
+（`https://app.foursquare.com/share/checkin/{id}?s={署名}&lang=ja`）から署名を取り出して、
+`https://swarmapp.com/user/{userId}/checkin/{id}?s={署名}` に組み直している。
+`userId` は起動時に `GET /v2/users/self` で一度だけ取って localStorage に置く。
+
+**共有処理に `await` を挟んではいけない。** クリックから同期で
+`window.open` / `navigator.share` を呼ばないと、ユーザー操作の有効期限
+（transient activation）が切れてポップアップも共有シートもブラウザに弾かれる。
+`GET /v2/checkins/{id}` を共有時に叩く実装にしていたときは、これで実際に詰まった。
 
 ---
 
@@ -102,7 +108,7 @@ URL は `GET /v2/checkins/{id}` の `checkinShortUrl`。署名（`?s=`）つき�
 | 認可 | `https://foursquare.com/oauth2/authenticate?response_type=code` |
 | トークン交換 | `https://foursquare.com/oauth2/access_token`（Functions 側） |
 | 一覧 | `GET /v2/users/self/checkins?limit=100` |
-| パーマリンク | `GET /v2/checkins/{id}` |
+| ユーザーID | `GET /v2/users/self`（起動時に1回だけ） |
 
 v2 の checkins 系は 2026-06 以降も無料枠で維持されている。
 

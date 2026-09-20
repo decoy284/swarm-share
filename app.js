@@ -8,6 +8,7 @@ const API = 'https://api.foursquare.com/v2';
 const API_VERSION = '20230823';
 const LIMIT = 100;
 const LS_TOKEN = 'imsat_token';
+const LS_UID = 'imsat_uid';
 
 const el = (id) => document.getElementById(id);
 
@@ -20,8 +21,8 @@ const views = {
 
 let token = null;
 let clientId = null;
-/** チェックイン詳細（パーマリンク取得用）のメモ化 */
-const permalinkCache = new Map();
+/** パーマリンクの組み立てに使う自分の Foursquare ユーザーID */
+let userId = null;
 
 /* --- ビュー切り替え -------------------------------------------- */
 
@@ -94,11 +95,18 @@ function stripQuery() {
   history.replaceState(null, '', location.pathname);
 }
 
+function forgetSession() {
+  try {
+    localStorage.removeItem(LS_TOKEN);
+    localStorage.removeItem(LS_UID);
+  } catch (e) { /* noop */ }
+  token = null;
+  userId = null;
+}
+
 function disconnect() {
   if (!confirm('Foursquare から切断しますか？')) return;
-  try { localStorage.removeItem(LS_TOKEN); } catch (e) { /* noop */ }
-  token = null;
-  permalinkCache.clear();
+  forgetSession();
   el('log').textContent = '';
   show('connect');
 }
@@ -122,16 +130,34 @@ async function fsq(path, params = {}) {
   return json.response;
 }
 
+/** パーマリンクの組み立てに要る。共有のたびに取りにいかなくて済むよう先に確保しておく */
+async function ensureUserId() {
+  if (userId) return;
+  try { userId = localStorage.getItem(LS_UID); } catch (e) { /* noop */ }
+  if (userId) return;
+  try {
+    const response = await fsq('/users/self');
+    userId = response.user?.id || null;
+    if (userId) {
+      try { localStorage.setItem(LS_UID, userId); } catch (e) { /* noop */ }
+    }
+  } catch (e) {
+    /* 取れなくても canonicalUrl で共有できるので致命ではない */
+  }
+}
+
 async function loadCheckins() {
   show('loading');
   try {
-    const response = await fsq('/users/self/checkins', { limit: String(LIMIT) });
+    const [response] = await Promise.all([
+      fsq('/users/self/checkins', { limit: String(LIMIT) }),
+      ensureUserId(),
+    ]);
     renderLog(response.checkins.items || []);
     show('list');
   } catch (e) {
     if (e.unauthorized) {
-      try { localStorage.removeItem(LS_TOKEN); } catch (_) { /* noop */ }
-      token = null;
+      forgetSession();
       el('connect-note').textContent = '接続の期限が切れました。もう一度つないでください。';
       show('connect');
       return;
@@ -209,58 +235,48 @@ function buildText(checkin, url) {
   return url ? `${body} ${url}` : body;
 }
 
-/** swarmapp.com の署名つきパーマリンク。一覧には入っていないので都度取りにいく */
-async function permalink(checkin) {
-  if (permalinkCache.has(checkin.id)) return permalinkCache.get(checkin.id);
+/**
+ * swarmapp.com の署名つきパーマリンク。
+ * 一覧の canonicalUrl（app.foursquare.com/share/checkin/...?s=署名）に署名が入っているので、
+ * そこから取り出して組み直す。共有のたびに API を叩かないのが肝心で、
+ * 非同期を挟むとユーザー操作の有効期限が切れて window.open も navigator.share も弾かれる。
+ */
+function permalink(checkin) {
+  const canonical = checkin.canonicalUrl || '';
+  let signature = '';
   try {
-    const response = await fsq(`/checkins/${checkin.id}`);
-    const url = response.checkin?.checkinShortUrl || response.checkin?.canonicalUrl || '';
-    permalinkCache.set(checkin.id, url);
-    return url;
-  } catch (e) {
-    return '';
+    signature = new URL(canonical).searchParams.get('s') || '';
+  } catch (e) { /* noop */ }
+
+  if (userId && signature) {
+    return `https://swarmapp.com/user/${userId}/checkin/${checkin.id}?s=${signature}`;
   }
+  return canonical;
 }
 
 /* --- 共有アクション --------------------------------------------- */
+/* どちらもクリックから同期で呼ぶ。await を挟んではいけない */
 
-async function withPending(button, fn) {
-  if (button.disabled) return;
-  button.disabled = true;
-  try {
-    await fn();
-  } finally {
-    button.disabled = false;
+function postToX(checkin) {
+  const text = buildText(checkin, permalink(checkin));
+  const url = `https://x.com/intent/post?text=${encodeURIComponent(text)}`;
+  const opened = window.open(url, '_blank', 'noopener');
+  if (!opened) location.href = url;
+}
+
+function shareCheckin(checkin) {
+  const text = buildText(checkin, permalink(checkin));
+
+  if (navigator.share) {
+    navigator.share({ text }).catch((e) => {
+      if (e.name !== 'AbortError') toast('共有できませんでした');
+    });
+    return;
   }
-}
 
-async function postToX(checkin, button) {
-  await withPending(button, async () => {
-    const text = buildText(checkin, await permalink(checkin));
-    const url = `https://x.com/intent/post?text=${encodeURIComponent(text)}`;
-    const opened = window.open(url, '_blank', 'noopener');
-    if (!opened) location.href = url;
-  });
-}
-
-async function shareCheckin(checkin, button) {
-  await withPending(button, async () => {
-    const text = buildText(checkin, await permalink(checkin));
-    if (navigator.share) {
-      try {
-        await navigator.share({ text });
-      } catch (e) {
-        if (e.name !== 'AbortError') toast('共有できませんでした');
-      }
-      return;
-    }
-    try {
-      await navigator.clipboard.writeText(text);
-      toast('コピーしました');
-    } catch (e) {
-      prompt('コピーしてください', text);
-    }
-  });
+  navigator.clipboard.writeText(text)
+    .then(() => toast('コピーしました'))
+    .catch(() => prompt('コピーしてください', text));
 }
 
 /* --- 描画 ------------------------------------------------------- */
@@ -345,7 +361,7 @@ function renderLog(checkins) {
     xBtn.type = 'button';
     xBtn.className = 'btn btn--primary';
     xBtn.innerHTML = `${ICON_X}<span>X でポスト</span>`;
-    xBtn.addEventListener('click', () => postToX(checkin, xBtn));
+    xBtn.addEventListener('click', () => postToX(checkin));
 
     const shareBtn = document.createElement('button');
     shareBtn.type = 'button';
@@ -353,7 +369,7 @@ function renderLog(checkins) {
     shareBtn.setAttribute('aria-label', shareLabel);
     shareBtn.title = shareLabel;
     shareBtn.innerHTML = ICON_SHARE;
-    shareBtn.addEventListener('click', () => shareCheckin(checkin, shareBtn));
+    shareBtn.addEventListener('click', () => shareCheckin(checkin));
 
     actions.append(xBtn, shareBtn);
     body.append(actions);
