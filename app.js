@@ -296,10 +296,16 @@ function permalink(checkin) {
 /* --- 共有アクション --------------------------------------------- */
 /* どちらもクリックから同期で呼ぶ。await を挟んではいけない */
 
-/** Chrome が解釈する intent: URI。X アプリを直接開き、無ければ web に落とす */
+/**
+ * Chrome が解釈する intent: URI。X アプリを直接開き、無ければ web に落とす。
+ *
+ * 独自スキーム（twitter://post?message=）は今の X アプリが本文を拾わず、
+ * 空の投稿画面が開いてしまう。App Link と同じ https の URL を
+ * そのまま X アプリ宛てに投げると、web 経由のときと同じように本文が入る。
+ */
 function androidXIntent(text, web) {
-  return 'intent://post?message=' + encodeURIComponent(text)
-    + '#Intent;scheme=twitter;package=com.twitter.android'
+  return 'intent://x.com/intent/post?text=' + encodeURIComponent(text)
+    + '#Intent;scheme=https;package=com.twitter.android'
     + ';S.browser_fallback_url=' + encodeURIComponent(web)
     + ';end';
 }

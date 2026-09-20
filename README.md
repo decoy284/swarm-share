@@ -117,8 +117,12 @@ PWA が裏で落とされても消えないようにするため。一覧から�
 Android では Chrome が解釈する `intent:` URI を使って X アプリを直接呼ぶ。
 
 ```
-intent://post?message=<text>#Intent;scheme=twitter;package=com.twitter.android;S.browser_fallback_url=<web>;end
+intent://x.com/intent/post?text=<text>#Intent;scheme=https;package=com.twitter.android;S.browser_fallback_url=<web>;end
 ```
+
+**独自スキーム（`twitter://post?message=`）は使わない。** 今の X アプリはこれで本文を拾わず、
+空の投稿画面が開く。App Link と同じ `https://x.com/intent/post?text=` を
+そのまま X アプリ宛てに投げるのが正解で、こうすると web 経由のときと同じ本文が入る。
 
 アプリが入っていなければ Chrome が `browser_fallback_url` に落としてくれるので、
 未インストールでも Web の intent 画面にはたどり着く。
