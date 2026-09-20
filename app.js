@@ -296,32 +296,23 @@ function permalink(checkin) {
 /* --- 共有アクション --------------------------------------------- */
 /* どちらもクリックから同期で呼ぶ。await を挟んではいけない */
 
-/**
- * Chrome が解釈する intent: URI。X アプリを直接開き、無ければ web に落とす。
- *
- * 独自スキーム（twitter://post?message=）は今の X アプリが本文を拾わず、
- * 空の投稿画面が開いてしまう。App Link と同じ https の URL を
- * そのまま X アプリ宛てに投げると、web 経由のときと同じように本文が入る。
- */
-function androidXIntent(text, web) {
-  return 'intent://x.com/intent/post?text=' + encodeURIComponent(text)
-    + '#Intent;scheme=https;package=com.twitter.android'
-    + ';S.browser_fallback_url=' + encodeURIComponent(web)
-    + ';end';
-}
-
 function postToX(checkin, comment) {
   const text = buildText(checkin, permalink(checkin), comment);
   const web = `https://x.com/intent/post?text=${encodeURIComponent(text)}`;
 
   /*
-   * Android で window.open すると、X アプリが起動したあとに x.com の
-   * カスタムタブが居残る（Web 側はログインしていないのでログイン画面になる）。
-   * intent: で X アプリを直接呼べばタブ自体が生まれない。
-   * アプリが入っていなければ Chrome が browser_fallback_url に落としてくれる。
+   * Android は X アプリへの渡し方で結果が変わる。実機で確かめた挙動:
+   *
+   *   window.open(web)              … 本文は入るが、x.com のカスタムタブが居残る
+   *   intent: + package=            … タブは出ないが、投稿画面の先頭に空行が足される
+   *   自分のウィンドウから web へ   … 本文そのまま・タブも出ない  ← これ
+   *
+   * App Link で受け取ったときだけ X アプリは本文をそのまま置く。
+   * タブを開かずに遷移すれば、Chrome が X アプリに引き渡してくれて
+   * PWA 自身はその場に残る（アプリが無いときだけ x.com へ進む）。
    */
   if (IS_ANDROID) {
-    location.href = androidXIntent(text, web);
+    location.href = web;
     return;
   }
 

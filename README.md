@@ -114,18 +114,22 @@ PWA が裏で落とされても消えないようにするため。一覧から�
 **x.com のカスタムタブが居残る**。Web 側はログインしていないのでログイン画面が残り、
 毎回閉じることになる。
 
-Android では Chrome が解釈する `intent:` URI を使って X アプリを直接呼ぶ。
+Android では**タブを開かず、自分のウィンドウから `https://x.com/intent/post?text=` へ遷移する**。
+Chrome が App Link を検知して X アプリに引き渡すので、PWA 自身はその場に残る。
 
-```
-intent://x.com/intent/post?text=<text>#Intent;scheme=https;package=com.twitter.android;S.browser_fallback_url=<web>;end
-```
+Galaxy Z Fold で実測した3通り。
 
-**独自スキーム（`twitter://post?message=`）は使わない。** 今の X アプリはこれで本文を拾わず、
-空の投稿画面が開く。App Link と同じ `https://x.com/intent/post?text=` を
-そのまま X アプリ宛てに投げるのが正解で、こうすると web 経由のときと同じ本文が入る。
+| 渡し方 | 本文 | 余計なタブ |
+| --- | --- | --- |
+| `window.open(web)` | 入る | **残る**（x.com の未ログイン画面） |
+| `intent://…;package=com.twitter.android;…` | 入るが**先頭に空行** | 出ない |
+| `location.href = web` | 入る | 出ない ← 採用 |
 
-アプリが入っていなければ Chrome が `browser_fallback_url` に落としてくれるので、
-未インストールでも Web の intent 画面にはたどり着く。
+X アプリは **App Link で受け取ったときだけ本文をそのまま置く**。`intent:` で
+`package=` を指定して直接叩くと、上にコメントを書く用の空行が足される。
+独自スキーム（`twitter://post?message=`）にいたっては本文を拾わず、空の投稿画面が開く。
+
+X アプリが入っていない場合は、そのまま x.com の intent 画面に進む。
 
 ---
 
